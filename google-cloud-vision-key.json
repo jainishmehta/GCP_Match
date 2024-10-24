@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "steadfast-canto-234019",
+  "private_key_id": "2d720889e673cd0c7ce9c500408b54da21b122d6",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDnVH7wxrQ/A3HG\nqdAYuRrxfV/gbj+sePtgZfT1MsA6WZmvvcUsIKsp/XmyjUQ1qAxEfvngwuoudIfd\nBQDwLJ35WJgXHROGj+HHgSzdHmmrK7srJMc7I9TB2CwLriHJDGEQ2Ec020U0tTSs\nSGUk3wrkMqmQiZYvFZTk7O5aPuvGk4/K3RNSPZxSnPfIv74jrhZ9bVyDYXj4Hhvs\nOwmwVEoHyk+GRbjN206DvLmAAG6XY8TWlu0/eXLlsmyWShtgei1oFG/MOJOLBJrs\nz+nB54dsrAZR9D6RcMbomg4K6N+WRZBBN2SOtmyitAqi0kMGZIB7v/gChO+wEhWZ\nTvGqgz8NAgMBAAECggEATHanAPJFOQDr9jVCNjHVQJZm/xmiDWHuAVaiKfxNAtyE\nCs2I44Wm3hnNRKIiNjQmXeu0r8DtxE47bGiPf1PYIcfRee5f+l4LzLSbfjljxzMM\nyn19J0S4Ohy4rmGwBDMF0JoUq1mBHiN5VisV16KsCHLgjoiT7ltNXIAeZxEeQQP7\nideIJKT3vGtLdnJ4TnKsYMatUg6HFNURfowVLk/uVeKWoPl1pCAeAaGzo2lo8V1Z\nbOAj54Dj20SexpsSUfzq3Wmvm5yXxp650QkPRZNOGG8u97fJTvez882oEUw/0tXh\nNAOkofgC3T/mxGKQGgq6gAkebbu26njxD9Y1CMkuxwKBgQD8m2X1BgzhtYhUWhoV\n6yj4eGHvQXUn7XMzpD7gj3yUgrAPgcEMJDIDoWBRjia3l6rWCbp1DCnwhdObEDiL\nsQh8Rx1XcbldxwgvxleYN4XIHTclmvuqiQGWFqetfD6FIHzmpoxBMlkomzyq11Sd\nHAfqRLSyF50UiUoUYZyEgy6vlwKBgQDqb++KWy+GZIhjSf1RR3y/G1aG4BwzOLIT\nqZYMKJZ3yuYFkptYY9hufOXjtCxsJINiMm7mGNdp+yGL3KJ+b88ix/vK2w8P0Qnh\nLpQQEC+0Eypc2r73hFMZ4ES8Z5evmXJ2zSM7u7+z8HXI1rIqepMVWicjuxoApY6P\nCDXgLk5a+wKBgHcZ/fSNKb2yDdlXsjzrZ6HfgK2CO27b8hlDM7JFdQPAqqplD1Re\nLIaxq+xIDdE6XX4VkChn185kCuVtvHuAuPN/xEHaiP/CPAXqippmc1lrDPlaHZbG\nikzt2Zlen0u9iaZmmHKU/py6tNwIMwjwknrOcjQWFiX8pUT+0QFZqMV5AoGBAIL3\nrZZZgp9NonP1bbLugN4yY5BNuvNShQk/ADgipIyfqQkL8gTbIpn25GbkzLxNWaiO\nDC43SoBGb2M3CwAfblQ77IpS/oMTgLVv0/91S3EKE+xzt6OHJPWbuEqYhMDwtGVy\nDHDeXiYj+2kLp9TbTTfseVkYuVoLIyz8pTxsIhHpAoGBAJshYhxXx8GF6xDFQolU\nYOX2ybyEysTArbZFAK9AFf6RBc3st2M61YQKdIjUmUTJDfNRXfNdlwu4ZlF0b9uJ\n6XqEdlslnmbI7H9vN9qtXQ3agzGsm45G7PDlClAwr5NbONqkt/5wN/9JdxsMelve\n8HGKQyT/4lziWXKhV3QnAblr\n-----END PRIVATE KEY-----\n",
+  "client_email": "google-cloud-vision-quickstart@steadfast-canto-234019.iam.gserviceaccount.com",
+  "client_id": "105416808484273698045",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/google-cloud-vision-quickstart%40steadfast-canto-234019.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
