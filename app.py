@@ -1,23 +1,18 @@
-def detect_labels(path):
-    """Detects labels in the file."""
-    from google.cloud import vision
+from pymongo import MongoClient
+import gridfs
 
-    client = vision.ImageAnnotatorClient()
+# Connect to MongoDB
+client = MongoClient('mongodb://localhost:27017/')
+db = client['mydatabase']
+fs = gridfs.GridFS(db)
 
-    with open(path, "rb") as image_file:
-        content = image_file.read()
+# Store an image using GridFS
+with open('path/to/your/image.jpg', 'rb') as image_file:
+    fs.put(image_file, filename='my_image.jpg')
 
-    image = vision.Image(content=content)
+# Retrieve the image from GridFS
+image_data = fs.get_last_version('my_image.jpg').read()
 
-    response = client.label_detection(image=image)
-    labels = response.label_annotations
-    print("Labels:")
-
-    for label in labels:
-        print(label.description)
-
-    if response.error.message:
-        raise Exception(
-            "{}\nFor more info on error messages, check: "
-            "https://cloud.google.com/apis/design/errors".format(response.error.message)
-        )
+# Save the retrieved image to a file
+with open('output_image.jpg', 'wb') as output_file:
+    output_file.write(image_data)
