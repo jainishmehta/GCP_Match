@@ -1,18 +1,18 @@
-from pymongo import MongoClient
-import gridfs
+import pymongo
+import json
 
-# Connect to MongoDB
-client = MongoClient('mongodb://localhost:27017/')
-db = client['mydatabase']
-fs = gridfs.GridFS(db)
+MONGODB_URI = "mongodb://localhost:27017/" 
+DATABASE_NAME = "clothing_images"     
+COLLECTION_NAME = "clothes" 
 
-# Store an image using GridFS
-with open('path/to/your/image.jpg', 'rb') as image_file:
-    fs.put(image_file, filename='my_image.jpg')
+# Create a MongoDB client
+client = pymongo.MongoClient(MONGODB_URI)
+db = client[DATABASE_NAME]
+collection = db[COLLECTION_NAME]
 
-# Retrieve the image from GridFS
-image_data = fs.get_last_version('my_image.jpg').read()
-
-# Save the retrieved image to a file
-with open('output_image.jpg', 'wb') as output_file:
-    output_file.write(image_data)
+# Read annotations.txt
+with open("/home/jainishmehta/jainish/GCP_Match/updated_images/annotations.txt", "r") as file:
+    content = file.read()
+    segments = content.split("-----")
+    print(segments)
+print("Annotations have been stored in MongoDB.")

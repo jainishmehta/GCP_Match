@@ -12,14 +12,21 @@ for image in *.jpg;
 done
 mv base64_*.jpg "$DEST_DIR"/
 cd $DEST_DIR
+
+PROJECT_ID="812751601631"
+REQUEST_JSON="request.json"
+OUTPUT_FILE="annotations.txt"
+> "$OUTPUT_FILE" 
 for image in *.jpg;
     do
     python3 base64_converter.py ${image}
-    PROJECT_ID="812751601631"
-    curl -X POST \
+    response=$(curl -X POST \
         -H "Authorization: Bearer $(gcloud auth print-access-token)" \
         -H "x-goog-user-project: $PROJECT_ID" \
         -H "Content-Type: application/json; charset=utf-8" \
-        -d @request.json \
-        "https://vision.googleapis.com/v1/images:annotate"
+        -d @$REQUEST_JSON \
+        "https://vision.googleapis.com/v1/images:annotate")
+    jq -r '.requests[].image.content' "$REQUEST_JSON" >> "$OUTPUT_FILE"
+    echo "$response" | jq -r '.responses[].labelAnnotations[] | {mid, description, score, topicality}' >> "$OUTPUT_FILE"
+    echo "-----" >> "$OUTPUT_FILE"
 done
