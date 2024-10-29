@@ -2,8 +2,6 @@ import base64
 import sys
 import requests
 import json
-from google.cloud import vision
-
 # Pass the image data to an encoding function.
 def encode_image(image):
     with open(image, "rb") as image_file:
