@@ -68,17 +68,3 @@ for result in results:
         print("Duplicate document exists!")
     else:
         clothing_collection.insert_one(result)
-
-"""
-
-
-# Clean up whitespace around each part
-parts = [part.strip() for part in parts]
-print(parts)
-# Print the results
-for i, part in enumerate(parts):
-    result = clothing_collection.insert_one(part)
-
-# Output the result of the insertion
-print("Inserted clothing item with ID:", result.inserted_id)
-"""
