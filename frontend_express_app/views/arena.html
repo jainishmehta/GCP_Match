@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arena</title>
+</head>
+<body>
+    <h1>Uploaded Image</h1>
+
+    <!-- This is where the image will be shown -->
+    <img id="uploaded-image" alt="Uploaded Image" style="max-width: 100%; height: auto;">
+
+    <script>
+        // Function to get query parameters from the URL
+        function getQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            return params;
+        }
+
+        // Get the 'filename' parameter and display it
+        const params = getQueryParams();
+        const filename = params.get('filename');
+        
+        if (filename) {
+            // Set the src attribute of the image to the path of the uploaded image
+            const imageElement = document.getElementById('uploaded-image');
+            imageElement.src = `/uploads/${filename}`; // The path to the uploaded image
+        }
+    </script>
+</body>
+</html>
