@@ -5,6 +5,8 @@ const fs = require('fs');
 const sharp = require('sharp');
 const { exec } = require('child_process'); 
 const app = express();
+const mongoose = require('mongoose');
+var Dress = require('./models/dress_model.js');
 const port = 3000;
 
 // Set up storage for uploaded images
@@ -67,7 +69,36 @@ function triggerBashScript(file_executed) {
       console.error(`Error executing bash script: ${stderr}`);
       return;
     }
-    console.log(`Bash script output: ${stdout}`);
+
+    const matches = stdout.match(/\[(.*?)\]/);
+
+    // If matches found, split by commas
+    mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority")
+
+
+    if (matches) {
+      const extractedList = matches[1].split(',').map(item => item.trim());
+      const extractedTypes = [];
+      for (let i=0; i<extractedList.length; i++){
+        const description = extractedList[i].split(':')[0].trim();
+        extractedTypes.push(description);
+        //If there is a match to one of the categories, add it
+        if (/Dress/i.test(description)) {
+            console.log(`${description} matches 'Dress'`);
+          //TODO: Check this stackoverflow for understanding : https://stackoverflow.com/questions/19051041/cannot-overwrite-model-once-compiled-mongoose
+            Dress.find().then((posts) => {
+              console.log(posts);
+             })
+          } else {
+            console.log(`${description} does not match 'Dress'`);
+        }
+      }
+      console.log(extractedTypes);
+
+
+    } else {
+      console.log('No matches found');
+    }
   });
 }
 

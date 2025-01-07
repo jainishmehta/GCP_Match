@@ -10,6 +10,6 @@ response=$(curl -X POST \
     -H "Content-Type: application/json; charset=utf-8" \
     -d @$REQUEST_JSON \
     "https://vision.googleapis.com/v1/images:annotate")
-echo "Curl response: $response"
+echo "$response" | jq -r '[.responses[].labelAnnotations[] | "\(.description): \(.score)"] | join(", ") | "[" + . + "]"'
 jq -r '.requests[].image.content' "$REQUEST_JSON" >> "$OUTPUT_FILE"
 echo "-----" >> "$OUTPUT_FILE"
