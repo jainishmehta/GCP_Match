@@ -86,16 +86,15 @@ function triggerBashScript(file_executed) {
         if (/Dress/i.test(description)) {
             console.log(`${description} matches 'Dress'`);
           //TODO: Check this stackoverflow for understanding : https://stackoverflow.com/questions/19051041/cannot-overwrite-model-once-compiled-mongoose
-            Dress.find().then((posts) => {
-              console.log(posts);
-             })
+
+            Dress.find({}).then((dresses) => {
+              console.log(dresses);
+            })
           } else {
             console.log(`${description} does not match 'Dress'`);
         }
       }
       console.log(extractedTypes);
-
-
     } else {
       console.log('No matches found');
     }
