@@ -47,8 +47,9 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     const base64Image = imageBuffer.toString('base64');
     const base64ImageName = `base64_uploads/base64_${req.file.filename}`;
     fs.writeFileSync(base64ImageName, base64Image);
-    res.render('arena', { filename: req.file.filename, base64ImageName: base64ImageName });
     triggerBashScript(`base64_${req.file.filename}`);
+    res.render('arena', { filename: req.file.filename, base64ImageName: base64ImageName });
+    
   }
   catch (error) {
     console.error('Error processing the image:', error);
@@ -57,7 +58,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
 });
 
 
-function triggerBashScript(file_executed) {
+function triggerBashScript(file_executed, callback) {
   const command = `cd base64_uploads && python3 base64_converter.py ${file_executed} && ./convert_upload.sh`;
 
   // Print the command for debugging purposes
@@ -67,7 +68,7 @@ function triggerBashScript(file_executed) {
   exec(command, (err, stdout, stderr) => {
     if (err) {
       console.error(`Error executing bash script: ${stderr}`);
-      return;
+      return callback(err);
     }
 
     const matches = stdout.match(/\[(.*?)\]/);
@@ -75,28 +76,38 @@ function triggerBashScript(file_executed) {
     // If matches found, split by commas
     mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority")
 
-
     if (matches) {
       const extractedList = matches[1].split(',').map(item => item.trim());
       const extractedTypes = [];
+      let firstDress; // Declare outside the function
       for (let i=0; i<extractedList.length; i++){
         const description = extractedList[i].split(':')[0].trim();
         extractedTypes.push(description);
         //If there is a match to one of the categories, add it
+        
         if (/Dress/i.test(description)) {
-            console.log(`${description} matches 'Dress'`);
-          //TODO: Check this stackoverflow for understanding : https://stackoverflow.com/questions/19051041/cannot-overwrite-model-once-compiled-mongoose
-
-            Dress.find({}).then((dresses) => {
-              console.log(dresses);
-            })
+          console.log(`${description} matches 'Dress'`);
+          (async function fetchDresses() {
+            try {
+              //TODO: change to match KNN closest dress, currently just the first dress
+                const dresses = await Dress.find({});
+                firstDress = dresses[0]; 
+                let result = firstDress['base_64'].replace(/\//g, '_').slice(-10)+".jpg";
+              //TODO: Get the S3 bucket URI and render to frontend          
+                console.log(result);
+              } catch (error) {
+                console.error("Error fetching dresses:", error);
+            }
+        })();
           } else {
             console.log(`${description} does not match 'Dress'`);
         }
       }
       console.log(extractedTypes);
+      //callback(null, firstDress);
     } else {
       console.log('No matches found');
+      callback(null, null);
     }
   });
 }
