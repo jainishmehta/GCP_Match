@@ -55,7 +55,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     
     console.log("s3_filename to render:", objectkey);
 
-    res.render('arena', { filename: req.file.filename, s3_filename: objectkey, base64ImageName: base64ImageName });
+    res.render('arena', { filename: req.file.filename, s3_filename: , base64ImageName: base64ImageName });
     
   }
   catch (error) {
@@ -116,10 +116,10 @@ function triggerBashScript(file_executed) {
                     console.error(err);
                     reject(err); // Reject on S3 error
                   } else {
-                    // Save the object to a file
+                    // TODO: is it best practice to use a public endpoint
                     fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
                     console.log(`File saved as ./s3_uploads/${objectKey}`);
-                    resolve(objectKey); // Resolve promise with the objectKey
+                    resolve(`https://${bucketName}.s3.amazonaws.com/${objectKey}`); // Resolve promise with the objectKey
                   }
                 });
               } catch (error) {
