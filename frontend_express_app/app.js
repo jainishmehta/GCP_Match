@@ -7,6 +7,9 @@ const { exec } = require('child_process');
 const mongoose = require('mongoose');
 var Dress = require('./models/dress_model.js');
 const AWS = require('aws-sdk');
+
+const { processKnnMatch } = require('./knn_match');
+
 const port = 3000;
 
 const app = express();
@@ -52,10 +55,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     fs.writeFileSync(base64ImageName, base64Image);
     
     const objectkey = await triggerBashScript(`base64_${req.file.filename}`);
-    
-    console.log("s3_filename to render:", objectkey);
-
-    res.render('arena', { filename: req.file.filename, s3_filename: , base64ImageName: base64ImageName });
+    res.render('arena', { filename: req.file.filename, s3_filename: objectkey, base64ImageName: base64ImageName });
     
   }
   catch (error) {
@@ -84,12 +84,16 @@ function triggerBashScript(file_executed) {
         const extractedList = matches[1].split(',').map(item => item.trim());
         const extractedTypes = [];
         let firstDress; // Declare outside the function
-        
+        console.log(extractedList)
+
+        const processed_list = processKnnMatch(extractedList);
+        console.log("PROCESSED LIST"+ processed_list)
+
+        //TODO: Add more than just dress category matches
         for (let i = 0; i < extractedList.length; i++) {
           const description = extractedList[i].split(':')[0].trim();
           extractedTypes.push(description);
-          
-          //TODO: Add more than just dress category matches
+        
           if (/Dress/i.test(description)) {
             console.log(`${description} matches 'Dress'`);
             
@@ -100,7 +104,6 @@ function triggerBashScript(file_executed) {
                 const dresses = await Dress.find({});
                 firstDress = dresses[0]; // Use first dress (as an example)
                 let result = firstDress['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
-                console.log(result);
 
                 const s3 = new AWS.S3();
                 const bucketName = 'gcpmatchproject';
@@ -117,8 +120,8 @@ function triggerBashScript(file_executed) {
                     reject(err); // Reject on S3 error
                   } else {
                     // TODO: is it best practice to use a public endpoint
-                    fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
-                    console.log(`File saved as ./s3_uploads/${objectKey}`);
+                   // fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
+                   // console.log(`File saved as ./s3_uploads/${objectKey}`);
                     resolve(`https://${bucketName}.s3.amazonaws.com/${objectKey}`); // Resolve promise with the objectKey
                   }
                 });
