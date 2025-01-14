@@ -4,10 +4,13 @@ const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
 const { exec } = require('child_process'); 
-const app = express();
 const mongoose = require('mongoose');
 var Dress = require('./models/dress_model.js');
+const AWS = require('aws-sdk');
 const port = 3000;
+
+const app = express();
+const s3 = new AWS.S3();
 
 // Set up storage for uploaded images
 const storage = multer.diskStorage({
@@ -47,8 +50,12 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     const base64Image = imageBuffer.toString('base64');
     const base64ImageName = `base64_uploads/base64_${req.file.filename}`;
     fs.writeFileSync(base64ImageName, base64Image);
-    triggerBashScript(`base64_${req.file.filename}`);
-    res.render('arena', { filename: req.file.filename, base64ImageName: base64ImageName });
+    
+    const objectkey = await triggerBashScript(`base64_${req.file.filename}`);
+    
+    console.log("s3_filename to render:", objectkey);
+
+    res.render('arena', { filename: req.file.filename, s3_filename: objectkey, base64ImageName: base64ImageName });
     
   }
   catch (error) {
@@ -57,62 +64,80 @@ app.post('/upload', upload.single('image'), async (req, res) => {
   }
 });
 
+function triggerBashScript(file_executed) {
+  return new Promise((resolve, reject) => {
+    const command = `cd base64_uploads && python3 base64_converter.py ${file_executed} && ./convert_upload.sh`;
 
-function triggerBashScript(file_executed, callback) {
-  const command = `cd base64_uploads && python3 base64_converter.py ${file_executed} && ./convert_upload.sh`;
+    // Print the command for debugging purposes
+    console.log(`Executing command: ${command}`);
 
-  // Print the command for debugging purposes
-  console.log(`Executing command: ${command}`);
+    // Use child_process to execute the bash script
+    exec(command, (err, stdout, stderr) => {
+      if (err) {
+        console.error(`Error executing bash script: ${stderr}`);
+        return reject(err); // Reject promise on error
+      }
 
-  // Use child_process to execute the bash script
-  exec(command, (err, stdout, stderr) => {
-    if (err) {
-      console.error(`Error executing bash script: ${stderr}`);
-      return callback(err);
-    }
-
-    const matches = stdout.match(/\[(.*?)\]/);
-
-    // If matches found, split by commas
-    mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority")
-
-    if (matches) {
-      const extractedList = matches[1].split(',').map(item => item.trim());
-      const extractedTypes = [];
-      let firstDress; // Declare outside the function
-      for (let i=0; i<extractedList.length; i++){
-        const description = extractedList[i].split(':')[0].trim();
-        extractedTypes.push(description);
-        //If there is a match to one of the categories, add it
+      const matches = stdout.match(/\[(.*?)\]/);
+      mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority")
+      if (matches) {
+        const extractedList = matches[1].split(',').map(item => item.trim());
+        const extractedTypes = [];
+        let firstDress; // Declare outside the function
         
-        if (/Dress/i.test(description)) {
-          console.log(`${description} matches 'Dress'`);
-          (async function fetchDresses() {
-            try {
-              //TODO: change to match KNN closest dress, currently just the first dress
+        for (let i = 0; i < extractedList.length; i++) {
+          const description = extractedList[i].split(':')[0].trim();
+          extractedTypes.push(description);
+          
+          //TODO: Add more than just dress category matches
+          if (/Dress/i.test(description)) {
+            console.log(`${description} matches 'Dress'`);
+            
+            // Fetch dress details (use async function with await)
+            (async function fetchDresses() {
+              try {
+                //TODO: change to match KNN closest dress, currently just the first dress
                 const dresses = await Dress.find({});
-                firstDress = dresses[0]; 
-                let result = firstDress['base_64'].replace(/\//g, '_').slice(-10)+".jpg";
-              //TODO: Get the S3 bucket URI and render to frontend          
+                firstDress = dresses[0]; // Use first dress (as an example)
+                let result = firstDress['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
                 console.log(result);
+
+                const s3 = new AWS.S3();
+                const bucketName = 'gcpmatchproject';
+                const objectKey = result;
+
+                const params = {
+                  Bucket: bucketName,
+                  Key: objectKey
+                };
+
+                s3.getObject(params, (err, data) => {
+                  if (err) {
+                    console.error(err);
+                    reject(err); // Reject on S3 error
+                  } else {
+                    // Save the object to a file
+                    fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
+                    console.log(`File saved as ./s3_uploads/${objectKey}`);
+                    resolve(objectKey); // Resolve promise with the objectKey
+                  }
+                });
               } catch (error) {
                 console.error("Error fetching dresses:", error);
-            }
-        })();
+                reject(error); // Reject if error occurs
+              }
+            })();
           } else {
             console.log(`${description} does not match 'Dress'`);
+          }
         }
+      } else {
+        console.log('No matches found');
+        reject('No matches found'); // Reject if no matches
       }
-      console.log(extractedTypes);
-      //callback(null, firstDress);
-    } else {
-      console.log('No matches found');
-      callback(null, null);
-    }
+    });
   });
 }
-
-
 
 // Serve uploaded images
 app.use('/uploads', express.static('uploads'));

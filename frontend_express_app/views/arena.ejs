@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arena</title>
+    <title>Match Page</title>
 </head>
 <body>
     <h1>Uploaded Image</h1>
-    <img src="/uploads/<%= filename %>" alt="Uploaded Image" style="max-width: 100%; height: auto;">
+    <img src="/uploads/<%= filename %>" alt="Uploaded Image" style="max-width: 25%; height: 25%;">
 </body>
 <body>
     <h1>Closest Image</h1>
-    <img src="/uploads/<%= filename %>" alt="Uploaded Image" style="max-width: 100%; height: auto;">
+    <img src="/s3_uploads/<%= s3_filename %>" alt="Close Image" style="max-width: 25%; height: 25%;">
 </body>
 
 </html>
