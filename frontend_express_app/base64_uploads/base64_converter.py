@@ -6,6 +6,8 @@ import json
 def encode_image(image):
     with open(image, "rb") as image_file:
         encoded_string = (image_file.read())
+        
+        print(encoded_string)
     with open("request.json", "r") as file:
         data = json.load(file)
     data['requests'][0]['image']['content'] = str(encoded_string)[2:-1]

@@ -13,6 +13,7 @@ for image in *.jpg;
         -d @$REQUEST_JSON \
         "https://vision.googleapis.com/v1/images:annotate")
     jq -r '.requests[].image.content' "$REQUEST_JSON" >> "$OUTPUT_FILE"
+    echo "$response" | jq -r '.responses[].localizedObjectAnnotations[] | {mid, name, score} ' >> "$OUTPUT_FILE"
     echo "$response" | jq -r '.responses[].labelAnnotations[] | {mid, description, score, topicality}' >> "$OUTPUT_FILE"
     echo "-----" >> "$OUTPUT_FILE"
 done

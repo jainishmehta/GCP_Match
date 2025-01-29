@@ -5,6 +5,36 @@ import base64
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
+def process_knn_match(extracted_list):
+    clothing_types = ['dress', 'short', 'shirt', 'pants', 'skirt']
+    
+    colors = ['white', 'black', 'blue', 'red', 'green', 'yellow', 'purple', 'pink', 'orange', 'brown', 'grey', 'beige']
+
+    matches = []
+
+    color_found = False
+    clothing_type_found = False
+
+    for current_item in extracted_list:
+        label = current_item[0].lower() # Extract label to check for colors and clothing types
+        print(label)
+        if not color_found:
+            has_color = any(color in label for color in colors)
+            if has_color:
+                matches.append(colors[colors.index(next(color for color in colors if color in label))])
+                color_found = True 
+                continue  
+
+        if not clothing_type_found:
+            has_clothing_type = any(clothing_type in label for clothing_type in clothing_types)
+            if has_clothing_type:
+                matches.insert(0, clothing_types[clothing_types.index(next(type for type in clothing_types if type in label))] )
+                clothing_type_found = True 
+
+    return matches
+
+
+
 # MongoDB URI and S3 Bucket Configuration
 uri = "mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority"
 s3_bucket_name = 'gcpmatchproject'
@@ -47,7 +77,8 @@ for part in parts:
                 description = ''
                 score = ''
                 for line in lines:
-                    if '"description":' in line:
+                    if ('description' in line) or ('name' in line):
+                        print(line)
                         description = line.split(':')[1].replace('"', '').replace(',', '').strip()
                         descrip_score.append(description)
                     if '"score":' in line:
@@ -56,17 +87,30 @@ for part in parts:
         
         # Combine description and score
         final_descrip_score = []
-        for i in range(0, len(descrip_score)-2, 2):
+        i=0
+        while i+2<=len(descrip_score):
             final_descrip_score.append((descrip_score[i], descrip_score[i+1]))
-
+            i+=2
         # Prepare the result object
         result = {
             "base_64": base64_encoding,
             "labels": final_descrip_score
         }
 
-        print(base64_encoding)
+        type_color_match = process_knn_match(final_descrip_score)
+        if type_color_match and type_color_match[0]=='dress':
+            clothing_collection = db.dresses
+        elif type_color_match and type_color_match[0]=='short':
+            clothing_collection = db.shorts
+        elif type_color_match and  type_color_match[0]=='shirt':
+            clothing_collection = db.shirts
+        elif type_color_match and type_color_match[0]=='pants':
+            clothing_collection = db.pants
+        elif type_color_match and type_color_match[0]=='skirts':
+            clothing_collection = db.skirts
+
         # Insert into MongoDB if not a duplicate
+        print(clothing_collection)
         existing_document = clothing_collection.find_one({"base_64": base64_encoding})
         if existing_document:
             print("Duplicate document exists!")

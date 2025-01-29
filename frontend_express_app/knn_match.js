@@ -21,7 +21,7 @@ function processKnnMatch(extractedList) {
         if (!colorFound) {
             const hasColor = colors.some(color => label.includes(color));
             if (hasColor) {
-                matches[1] = (currentItem);
+                matches[1] = (colors.find(color => label.includes(color))+currentItem.split(':')[1].toLowerCase());
                 colorFound = true; // Flag that a color has been found
                 continue; // Skip checking for clothing types in this string
             }
@@ -31,7 +31,7 @@ function processKnnMatch(extractedList) {
         if (!clothingTypeFound) {
             const hasClothingType = clothingTypes.some(type => label.includes(type));
             if (hasClothingType) {
-                matches[0] = (currentItem);
+                matches[0] = ( clothingTypes.find(type => label.includes(type))+currentItem.split(':')[1].toLowerCase());
                 clothingTypeFound = true; // Flag that a clothing type has been found
             }
         }
