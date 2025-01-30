@@ -9,16 +9,18 @@ var Dress = require('./models/dress_model.js');
 var Short = require('./models/short_model.js');
 var Shirt = require('./models/top_models.js');
 var Pant = require('./models/pant_model.js');
-const { MongoClient } = require('mongodb');
+const { MongoClient, MinKey } = require('mongodb');
 
 const AWS = require('aws-sdk');
 
+const cors = require('cors');
+
 const { processKnnMatch } = require('./knn_match');
 
-const port = 3000;
-
+const port = process.env.PORT || 5000;
 const app = express();
 const s3 = new AWS.S3();
+app.use(cors());  // Should be before your routes
 
 // Set up storage for uploaded images
 const storage = multer.diskStorage({
@@ -32,20 +34,14 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-app.set('view engine', 'ejs');
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'client', 'build')));
 
-// Serve the upload form
 app.get('/', (req, res) => {
-  res.send(`
-    <h1>Upload an Image</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-      <input type="file" name="image" accept="image/*" required />
-      <button type="submit">Upload</button>
-    </form>
-  `);
+  res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
 });
+
 
 // Handle image upload
 app.post('/upload', upload.single('image'), async (req, res) => {
@@ -60,14 +56,75 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     fs.writeFileSync(base64ImageName, base64Image);
     
     const objectkey = await triggerBashScript(`base64_${req.file.filename}`);
-    res.render('arena', { filename: req.file.filename, s3_filename: objectkey, base64ImageName: base64ImageName });
     
+    const responseData = {
+      uploadedImageUrl: `http://localhost:5000/uploads/${req.file.filename}`,
+      closestImageUrl: objectkey,  // Replace with actual closest image URL
+    };
+    console.log('Response Data:', responseData);  // Logs the data
+    
+    // Send the response
+    res.json(responseData);
   }
   catch (error) {
     console.error('Error processing the image:', error);
     res.status(500).send('Error processing the image.');
   }
 });
+
+
+// Serve React static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'client', 'build')));
+
+  // Catch-all route to serve index.html (for React Router)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
+  });
+}
+
+function findHighestMatch(extractedList, shortList) {
+  let highestPercentage = 0;
+  let highestMatchIndex = -1;
+  let i =0;
+  shortList.forEach(item => {
+    let seen = new Set();
+    let similarPercentage = 0;
+    let labels = item.labels;
+
+    labels.forEach(labelObj => {
+      let label = labelObj[0]; 
+      let matchPercentage = labelObj[1];
+
+      extractedList.forEach((extractedItem, index) => {
+        let [extractedLabel, extractedPercentage] = extractedItem.split(":");
+        extractedLabel = extractedLabel.trim();
+        extractedPercentage = parseFloat(extractedPercentage.trim());
+
+        // Check if the label matches and we haven't seen it yet
+        if (extractedLabel.includes(label) && !seen.has(extractedLabel)) {
+          // Add the extracted percentage to the total
+          similarPercentage += Math.min(extractedPercentage,matchPercentage)
+
+          // Mark this label as seen
+          seen.add(extractedLabel);
+        }
+      })
+    })
+
+         // Check if this match has the highest percentage so far
+         if (similarPercentage > highestPercentage) {
+          console.log(similarPercentage)
+          highestPercentage = similarPercentage;
+          highestMatchIndex = i;
+        }
+
+        i=i+1;
+
+        });
+  console.log(highestMatchIndex)
+  return highestMatchIndex;
+}
 
 function triggerBashScript(file_executed) {
   return new Promise((resolve, reject) => {
@@ -82,11 +139,11 @@ function triggerBashScript(file_executed) {
         console.error(`Error executing bash script: ${stderr}`);
         return reject(err); // Reject promise on error
       }
-
       const matches = stdout.match(/\[(.*?)\]/);
       mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority")
       if (matches) {
           const extractedList = matches[1].split(',').map(item => item.trim());
+          console.log("Extracted list")
           console.log(extractedList);
           const processed_list = processKnnMatch(extractedList);
           const bestClothingType = processed_list[0].split(' ')[0];
@@ -100,9 +157,10 @@ function triggerBashScript(file_executed) {
                 try {
                   //TODO: change to match KNN closest dress, currently just the first dress
                   const short = await Short.find({});
-                  firstShort = short[0]; // Use first dress (as an example)
+                  highest_index = findHighestMatch(extractedList, short)
+                  firstShort = short[highest_index]; // Use first dress (as an example)
                   let result = firstShort['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
-                  console.log(result)
+
                   const s3 = new AWS.S3();
                   const bucketName = 'gcpmatchproject';
                   const objectKey = result;
@@ -136,8 +194,9 @@ function triggerBashScript(file_executed) {
                 try {
                   //TODO: change to match KNN closest dress, currently just the first dress
                   const dresses = await Dress.find({});
-                  console.log(dresses[0])
-                  firstDress = dresses[0]; // Use first dress (as an example)
+                  highest_index = findHighestMatch(extractedList, dresses)
+                  console.log(highest_index)
+                  firstDress = dresses[highest_index]; // Use first dress (as an example)
                   let result = firstDress['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
   
                   const s3 = new AWS.S3();
@@ -170,8 +229,9 @@ function triggerBashScript(file_executed) {
                 try {
                   //TODO: change to match KNN closest dress, currently just the first dress
                   const shirts = await Shirt.find({});
-                  console.log(shirts[0])
-                  firstShirt = shirts[0]; // Use first dress (as an example)
+                  highest_index = findHighestMatch(extractedList, shirts)
+                  console.log(highest_index)
+                  firstShirt = shirts[highest_index]; // Use first dress (as an example)
                   let result = firstShirt['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
   
                   const s3 = new AWS.S3();
@@ -204,8 +264,9 @@ function triggerBashScript(file_executed) {
                 try {
                   //TODO: change to match KNN closest dress, currently just the first dress
                   const pants = await Pant.find({});
-                  console.log(pants[0])
-                  firstPant = pants[0]; // Use first dress (as an example)
+                  highest_index = findHighestMatch(extractedList, pants)
+                  console.log(highest_index)
+                  firstPant = pants[highest_index]; // Use first dress (as an example)
                   let result = firstPant['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
   
                   const s3 = new AWS.S3();
@@ -216,7 +277,7 @@ function triggerBashScript(file_executed) {
                     Bucket: bucketName,
                     Key: objectKey
                   };
-  
+                  console.log(objectKey)
                   s3.getObject(params, (err, data) => {
                     if (err) {
                       console.error(err);
