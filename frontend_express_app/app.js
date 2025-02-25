@@ -9,8 +9,6 @@ var Dress = require('./models/dress_model.js');
 var Short = require('./models/short_model.js');
 var Shirt = require('./models/top_models.js');
 var Pant = require('./models/pant_model.js');
-const { MongoClient, MinKey } = require('mongodb');
-
 const AWS = require('aws-sdk');
 
 const cors = require('cors');
@@ -20,15 +18,14 @@ const { processKnnMatch } = require('./knn_match');
 const port = process.env.PORT || 5000;
 const app = express();
 const s3 = new AWS.S3();
-app.use(cors());  // Should be before your routes
+app.use(cors());
 
-// Set up storage for uploaded images
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/'); // Directory to store uploaded images
+    cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // Rename the file
+    cb(null, Date.now() + path.extname(file.originalname));
   }
 });
 
@@ -42,8 +39,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
 });
 
-
-// Handle image upload
 app.post('/upload', upload.single('image'), async (req, res) => {
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
@@ -59,11 +54,10 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     
     const responseData = {
       uploadedImageUrl: `http://localhost:5000/uploads/${req.file.filename}`,
-      closestImageUrl: objectkey,  // Replace with actual closest image URL
+      closestImageUrl: objectkey,
     };
-    console.log('Response Data:', responseData);  // Logs the data
-    
-    // Send the response
+    console.log('Response Data:', responseData);
+
     res.json(responseData);
   }
   catch (error) {
@@ -72,12 +66,8 @@ app.post('/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-
-// Serve React static files in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'client', 'build')));
-
-  // Catch-all route to serve index.html (for React Router)
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
   });
@@ -112,8 +102,7 @@ function findHighestMatch(extractedList, shortList) {
       })
     })
 
-         // Check if this match has the highest percentage so far
-         if (similarPercentage > highestPercentage) {
+        if (similarPercentage > highestPercentage) {
           console.log(similarPercentage)
           highestPercentage = similarPercentage;
           highestMatchIndex = i;
@@ -126,184 +115,91 @@ function findHighestMatch(extractedList, shortList) {
   return highestMatchIndex;
 }
 
-function triggerBashScript(file_executed) {
-  return new Promise((resolve, reject) => {
-    const command = `cd base64_uploads && python3 base64_converter.py ${file_executed} && ./convert_upload.sh`;
+const bucketName = "gcpmatchproject";
 
-    // Print the command for debugging purposes
-    console.log(`Executing command: ${command}`);
+// Function to fetch the clothing item based on type
+async function fetchClothing(ClothingModel, extractedList) {
+    try {
+        const items = await ClothingModel.find({});
+        const highestIndex = findHighestMatch(extractedList, items);
+        const bestMatch = items[highestIndex];
 
-    // Use child_process to execute the bash script
-    exec(command, (err, stdout, stderr) => {
-      if (err) {
-        console.error(`Error executing bash script: ${stderr}`);
-        return reject(err); // Reject promise on error
-      }
-      const matches = stdout.match(/\[(.*?)\]/);
-      mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority")
-      if (matches) {
-          const extractedList = matches[1].split(',').map(item => item.trim());
-          console.log("Extracted list")
-          console.log(extractedList);
-          const processed_list = processKnnMatch(extractedList);
-          const bestClothingType = processed_list[0].split(' ')[0];
-          console.log("PROCESSED LIST", bestClothingType.trim());
-          // Declare clothes outside the if/else if block
-          let firstMatch;
-          try {
-            //TODO: check every clothing type works
-            if (bestClothingType === 'short') {
-              (async function fetchShorts() {
-                try {
-                  //TODO: change to match KNN closest dress, currently just the first dress
-                  const short = await Short.find({});
-                  highest_index = findHighestMatch(extractedList, short)
-                  firstShort = short[highest_index]; // Use first dress (as an example)
-                  let result = firstShort['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
+        if (!bestMatch) throw new Error("No matching clothing item found.");
 
-                  const s3 = new AWS.S3();
-                  const bucketName = 'gcpmatchproject';
-                  const objectKey = result;
-  
-                  const params = {
-                    Bucket: bucketName,
-                    Key: objectKey
-                  };
-  
-                  s3.getObject(params, (err, data) => {
-                    if (err) {
-                      console.error(err);
-                      reject(err); // Reject on S3 error
-                    } else {
-                      // TODO: is it best practice to use a public endpoint
-                     // fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
-                     // console.log(`File saved as ./s3_uploads/${objectKey}`);
-                      resolve(`https://${bucketName}.s3.amazonaws.com/${objectKey}`); // Resolve promise with the objectKey
-                    }
-                  });
-                } catch (error) {
-                  console.error("Error fetching dresses:", error);
-                  reject(error); // Reject if error occurs
-                }
-              })();
+        const objectKey = bestMatch['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
+        return objectKey;
+    } catch (error) {
+        console.error(`Error fetching clothing: ${error}`);
+        throw error;
+    }
+}
 
+// Function to retrieve an S3 object and return its public URL
+function getS3ObjectUrl(objectKey) {
+    const params = { Bucket: bucketName, Key: objectKey };
 
+    return new Promise((resolve, reject) => {
+        s3.getObject(params, (err, data) => {
+            if (err) {
+                console.error(`Error retrieving S3 object: ${err}`);
+                return reject(err);
+            }
+            const url = `https://${bucketName}.s3.amazonaws.com/${objectKey}`;
+            resolve(url);
+        });
+    });
+}
 
-            } else if (bestClothingType === 'dress') {
-              (async function fetchDresses() {
-                try {
-                  //TODO: change to match KNN closest dress, currently just the first dress
-                  const dresses = await Dress.find({});
-                  highest_index = findHighestMatch(extractedList, dresses)
-                  console.log(highest_index)
-                  firstDress = dresses[highest_index]; // Use first dress (as an example)
-                  let result = firstDress['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
-  
-                  const s3 = new AWS.S3();
-                  const bucketName = 'gcpmatchproject';
-                  const objectKey = result;
-  
-                  const params = {
-                    Bucket: bucketName,
-                    Key: objectKey
-                  };
-  
-                  s3.getObject(params, (err, data) => {
-                    if (err) {
-                      console.error(err);
-                      reject(err); // Reject on S3 error
-                    } else {
-                      // TODO: is it best practice to use a public endpoint
-                     // fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
-                     // console.log(`File saved as ./s3_uploads/${objectKey}`);
-                      resolve(`https://${bucketName}.s3.amazonaws.com/${objectKey}`); // Resolve promise with the objectKey
-                    }
-                  });
-                } catch (error) {
-                  console.error("Error fetching dresses:", error);
-                  reject(error); // Reject if error occurs
-                }
-              })();
-             }else if (bestClothingType === 'shirt') {
-              (async function fetchShirts() {
-                try {
-                  //TODO: change to match KNN closest dress, currently just the first dress
-                  const shirts = await Shirt.find({});
-                  highest_index = findHighestMatch(extractedList, shirts)
-                  console.log(highest_index)
-                  firstShirt = shirts[highest_index]; // Use first dress (as an example)
-                  let result = firstShirt['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
-  
-                  const s3 = new AWS.S3();
-                  const bucketName = 'gcpmatchproject';
-                  const objectKey = result;
-  
-                  const params = {
-                    Bucket: bucketName,
-                    Key: objectKey
-                  };
-  
-                  s3.getObject(params, (err, data) => {
-                    if (err) {
-                      console.error(err);
-                      reject(err); // Reject on S3 error
-                    } else {
-                      // TODO: is it best practice to use a public endpoint
-                     // fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
-                     // console.log(`File saved as ./s3_uploads/${objectKey}`);
-                      resolve(`https://${bucketName}.s3.amazonaws.com/${objectKey}`); // Resolve promise with the objectKey
-                    }
-                  });
-                } catch (error) {
-                  console.error("Error fetching dresses:", error);
-                  reject(error); // Reject if error occurs
-                }
-              })();           
-             }else if (bestClothingType === 'pants') {
-              (async function fetchPants() {
-                try {
-                  //TODO: change to match KNN closest dress, currently just the first dress
-                  const pants = await Pant.find({});
-                  highest_index = findHighestMatch(extractedList, pants)
-                  console.log(highest_index)
-                  firstPant = pants[highest_index]; // Use first dress (as an example)
-                  let result = firstPant['base_64'].replace(/\//g, '_').slice(-10) + ".jpg";
-  
-                  const s3 = new AWS.S3();
-                  const bucketName = 'gcpmatchproject';
-                  const objectKey = result;
-  
-                  const params = {
-                    Bucket: bucketName,
-                    Key: objectKey
-                  };
-                  console.log(objectKey)
-                  s3.getObject(params, (err, data) => {
-                    if (err) {
-                      console.error(err);
-                      reject(err); // Reject on S3 error
-                    } else {
-                      // TODO: is it best practice to use a public endpoint
-                     // fs.writeFileSync(`./s3_uploads/${objectKey}`, data.Body);
-                     // console.log(`File saved as ./s3_uploads/${objectKey}`);
-                      resolve(`https://${bucketName}.s3.amazonaws.com/${objectKey}`); // Resolve promise with the objectKey
-                    }
-                  });
-                } catch (error) {
-                  console.error("Error fetching dresses:", error);
-                  reject(error); // Reject if error occurs
-                }
-              })(); 
-            } else if (bestClothingType === 'skirts') {
+// Main function to trigger the bash script and process results
+function triggerBashScript(fileExecuted) {
+    return new Promise((resolve, reject) => {
+        const command = `cd base64_uploads && python3 base64_converter.py ${fileExecuted} && ./convert_upload.sh`;
+
+        console.log(`Executing command: ${command}`);
+        exec(command, async (err, stdout, stderr) => {
+            if (err) {
+                console.error(`Error executing bash script: ${stderr}`);
+                return reject(err);
             }
 
-          } catch (error) {
-            console.error("Error fetching clothes:", error);
-            reject(error); // Reject if error occurs
-          }
-        }
+            const matches = stdout.match(/\[(.*?)\]/);
+            if (!matches) return reject("No matches found in script output.");
+
+            const extractedList = matches[1].split(",").map(item => item.trim());
+            console.log("Extracted List:", extractedList);
+
+            mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority");
+
+            try {
+                const processedList = processKnnMatch(extractedList);
+                const bestClothingType = processedList[0].split(' ')[0].trim();
+                console.log("Best Clothing Type:", bestClothingType);
+
+                const clothingModels = {
+                    short: Short,
+                    dress: Dress,
+                    shirt: Shirt,
+                    pants: Pant
+                };
+
+                const Model = clothingModels[bestClothingType];
+                if (!Model) {
+                    console.warn(`No model found for clothing type: ${bestClothingType}`);
+                    return reject(`Unsupported clothing type: ${bestClothingType}`);
+                }
+
+                const objectKey = await fetchClothing(Model, extractedList);
+                const imageUrl = await getS3ObjectUrl(objectKey);
+
+                console.log(`Image URL: ${imageUrl}`);
+                resolve(imageUrl);
+
+            } catch (error) {
+                console.error("Error processing clothing:", error);
+                reject(error);
+            }
+        });
     });
-  });
 }
 
 
