@@ -20,7 +20,6 @@ dbus-python==1.2.18
 decorator==5.1.1
 defusedxml==0.7.1
 distro==1.7.0
-distro-info==1.1+ubuntu0.1
 dnspython==2.6.1
 docopt==0.6.2
 email_validator==2.2.0
