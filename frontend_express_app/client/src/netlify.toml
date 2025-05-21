@@ -1,0 +1,10 @@
+[build]
+  base = "frontend_express_app"
+  command = "npm install"
+  publish = "public"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/api"
+  status = 200
