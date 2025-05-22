@@ -15,10 +15,13 @@ const cors = require('cors');
 
 const { processKnnMatch } = require('./knn_match');
 
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 10000;
 const app = express();
 const s3 = new AWS.S3();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'https://your-netlify-app.netlify.app',
+  credentials: true
+}));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -33,12 +36,13 @@ const upload = multer({ storage: storage });
 
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+/*
 app.use(express.static(path.join(__dirname, 'client', 'build')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
 });
-
+*/
 app.post('/upload', upload.single('image'), async (req, res) => {
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
