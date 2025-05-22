@@ -19,7 +19,7 @@ const port = process.env.PORT || 10000;
 const app = express();
 const s3 = new AWS.S3();
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'https://visualmatcher.netlify.app/',
+  origin: process.env.FRONTEND_URL || 'https://visualmatcher.netlify.app',
   credentials: true
 }));
 
@@ -168,6 +168,7 @@ function triggerBashScript(fileExecuted) {
             }
 
             const matches = stdout.match(/\[(.*?)\]/);
+            console.log(`MATCHES ${matches}`);
             if (!matches) return reject("No matches found in script output.");
 
             const extractedList = matches[1].split(",").map(item => item.trim());
