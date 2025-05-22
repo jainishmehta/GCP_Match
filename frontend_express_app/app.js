@@ -56,8 +56,9 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     
     const objectkey = await triggerBashScript(`base64_${req.file.filename}`);
     
+    const backendUrl = process.env.BACKEND_URL || 'https://gcp-match.onrender.com';
     const responseData = {
-      uploadedImageUrl: `http://localhost:5000/uploads/${req.file.filename}`,
+      uploadedImageUrl: `${backendUrl}/uploads/${req.file.filename}`,
       closestImageUrl: objectkey,
     };
     console.log('Response Data:', responseData);
