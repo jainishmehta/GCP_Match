@@ -19,7 +19,7 @@ const port = process.env.PORT || 10000;
 const app = express();
 const s3 = new AWS.S3();
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'https://your-netlify-app.netlify.app',
+  origin: process.env.FRONTEND_URL || 'https://visualmatcher.netlify.app/',
   credentials: true
 }));
 
