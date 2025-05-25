@@ -23,19 +23,49 @@ app.use(cors({
   credentials: true
 }));
 
+const uploadDir = process.env.NODE_ENV === 'production' 
+    ? '/opt/render/project/src/frontend_express_app/uploads'
+    : path.join(__dirname, 'uploads');
+
+fs.mkdirSync(uploadDir, { recursive: true });
+app.use('/uploads', (req, res, next) => {
+    console.log('Upload request:', {
+        path: req.path,
+        uploadDir,
+        exists: fs.existsSync(path.join(uploadDir, path.basename(req.path)))
+    });
+    next();
+});
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const filename = Date.now() + path.extname(file.originalname);
+        console.log(`Saving file: ${filename}`);
+        cb(null, filename);
+    }
 });
 
 const upload = multer({ storage: storage });
+app.use('/uploads', express.static(uploadDir));
 
+app.get('/uploads/:filename', (req, res, next) => {
+    const filePath = path.join(uploadDir, req.params.filename);
+    console.log(`Checking file access:`, {
+        filename: req.params.filename,
+        fullPath: filePath,
+        exists: fs.existsSync(filePath)
+    });
+    
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send('File not found');
+    }
+});
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 /*
 app.use(express.static(path.join(__dirname, 'client', 'build')));
 
@@ -59,7 +89,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     const backendUrl = process.env.BACKEND_URL || 'https://gcp-match.onrender.com';
     const responseData = {
       uploadedImageUrl: `${backendUrl}/uploads/${req.file.filename}`,
-      closestImageUrl: objectkey,
+      closestImageUrl: objectkey
     };
     console.log('Response Data:', responseData);
 
@@ -210,7 +240,7 @@ function triggerBashScript(fileExecuted) {
 
 
 // Serve uploaded images
-app.use('/uploads', express.static('uploads'));
+app.use(express.static('uploads'));
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 });
