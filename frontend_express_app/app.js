@@ -74,31 +74,55 @@ app.get('/', (req, res) => {
 });
 */
 app.post('/upload', upload.single('image'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('No file uploaded.');
-  }
-  const uploadedImagePath = path.join(__dirname, 'uploads', req.file.filename);
-  try {
-    const imageBuffer = await sharp(uploadedImagePath).resize(224, 224).toBuffer();
-    const base64Image = imageBuffer.toString('base64');
-    const base64ImageName = `base64_uploads/base64_${req.file.filename}`;
-    fs.writeFileSync(base64ImageName, base64Image);
-    
-    const objectkey = await triggerBashScript(`base64_${req.file.filename}`);
-    
-    const backendUrl = process.env.BACKEND_URL || 'https://gcp-match.onrender.com';
-    const responseData = {
-      uploadedImageUrl: `${backendUrl}/uploads/${req.file.filename}`,
-      closestImageUrl: objectkey
-    };
-    console.log('Response Data:', responseData);
+    try {
+        // Log request details
+        console.log('Upload request received:', {
+            fileExists: !!req.file,
+            fileName: req.file?.filename,
+            filePath: req.file ? path.join(uploadDir, req.file.filename) : null
+        });
 
-    res.json(responseData);
-  }
-  catch (error) {
-    console.error('Error processing the image:', error);
-    res.status(500).send('Error processing the image.');
-  }
+        if (!req.file) {
+            throw new Error('No file uploaded');
+        }
+
+        // Verify file exists and is accessible
+        const filePath = path.join(uploadDir, req.file.filename);
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`File not found at ${filePath}`);
+        }
+
+        // Log file details
+        const stats = fs.statSync(filePath);
+        console.log('File details:', {
+            size: stats.size,
+            permissions: stats.mode,
+            path: filePath
+        });
+
+        // Process image
+        const result = await triggerBashScript(req.file.filename);
+        
+        // Log success
+        console.log('Processing completed:', result);
+        
+        res.json({
+            success: true,
+            uploadedImageUrl: `${process.env.BACKEND_URL || 'https://gcp-match.onrender.com'}/uploads/${req.file.filename}`,
+            closestImageUrl: result
+        });
+
+    } catch (error) {
+        console.error('Upload processing error:', {
+            message: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            error: 'Error processing the image',
+            details: error.message
+        });
+    }
 });
 /*
 if (process.env.NODE_ENV === 'production') {
@@ -185,59 +209,124 @@ function getS3ObjectUrl(objectKey) {
     });
 }
 
-// Main function to trigger the bash script and process results
 function triggerBashScript(fileExecuted) {
     return new Promise((resolve, reject) => {
-        const command = `cd base64_uploads && python3 base64_converter.py ${fileExecuted} && ./convert_upload.sh`;
+        const sourceFile = path.join(uploadDir, fileExecuted);
+        const targetDir = path.join(__dirname, 'base64_uploads');
+        const targetFile = path.join(targetDir, fileExecuted);
 
-        console.log(`Executing command: ${command}`);
-        exec(command, async (err, stdout, stderr) => {
-            if (err) {
-                console.error(`Error executing bash script: ${stderr}`);
-                return reject(err);
+        try {
+            // Validate source file exists
+            if (!fs.existsSync(sourceFile)) {
+                throw new Error(`Source file not found: ${sourceFile}`);
             }
 
-            const matches = stdout.match(/\[(.*?)\]/);
-            console.log(`MATCHES ${matches}`);
-            if (!matches) return reject("No matches found in script output.");
+            fs.mkdirSync(targetDir, { recursive: true });
+            fs.copyFileSync(sourceFile, targetFile);
+            
+            const command = `cd ${targetDir} && python3 base64_converter.py ../uploads/${fileExecuted} && ./convert_upload.sh`;
+            console.log('Executing command:', command);
 
-            const extractedList = matches[1].split(",").map(item => item.trim());
-            console.log("Extracted List:", extractedList);
+            exec(command, async (err, stdout, stderr) => {
+                let extractedList = [];
 
-            mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority");
+                try {
+                    if (err) {
+                        console.error('Script execution error:', {
+                            error: err,
+                            stderr: stderr
+                        });
+                        throw new Error(`Script execution failed: ${stderr}`);
+                    }
 
-            try {
-                const processedList = processKnnMatch(extractedList);
-                const bestClothingType = processedList[0].split(' ')[0].trim();
-                console.log("Best Clothing Type:", bestClothingType);
+                    console.log('Raw script output:', stdout);
 
-                const clothingModels = {
-                    short: Short,
-                    dress: Dress,
-                    shirt: Shirt,
-                    pants: Pant
-                };
+                    // Find all arrays in output using regex
+                    const arrays = stdout.match(/\[(.*?)\]/g);
+                    if (!arrays || arrays.length === 0) {
+                        throw new Error('No arrays found in output');
+                    }
 
-                const Model = clothingModels[bestClothingType];
-                if (!Model) {
-                    console.warn(`No model found for clothing type: ${bestClothingType}`);
-                    return reject(`Unsupported clothing type: ${bestClothingType}`);
+                    // Get the last array (which should contain the labels)
+                    const lastArray = arrays[arrays.length - 1];
+                    console.log('Found label array:', lastArray);
+
+                    // Parse the labels
+                    extractedList = lastArray
+                        .slice(1, -1) // Remove [ ]
+                        .split(',')
+                        .map(item => item.trim())
+                        .filter(item => {
+                            // Only keep items that look like "Label: 0.123"
+                            return item && 
+                                   !item.startsWith('iVBOR') && 
+                                   item.includes(':') &&
+                                   !isNaN(parseFloat(item.split(':')[1]));
+                        });
+
+                    if (!extractedList.length) {
+                        throw new Error('No valid labels found in output');
+                    }
+
+                    console.log('Extracted labels:', extractedList);
+
+                    // Connect to MongoDB
+                    await mongoose.connect("mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority");
+
+                    // Process the labels
+                    const processedList = processKnnMatch(extractedList);
+                    if (!processedList?.length) {
+                        throw new Error('No valid clothing types found');
+                    }
+
+                    const bestClothingType = processedList[0].split(' ')[0]?.trim().toLowerCase();
+                    if (!bestClothingType) {
+                        throw new Error('Invalid clothing type format');
+                    }
+
+                    console.log('Best clothing type:', bestClothingType);
+
+                    // Get matching model
+                    const clothingModels = {
+                        short: Short,
+                        dress: Dress,
+                        shirt: Shirt,
+                        pants: Pant
+                    };
+
+                    const Model = clothingModels[bestClothingType];
+                    if (!Model) {
+                        throw new Error(`Unsupported clothing type: ${bestClothingType}`);
+                    }
+
+                    const objectKey = await fetchClothing(Model, extractedList);
+                    const imageUrl = await getS3ObjectUrl(objectKey);
+
+                    console.log('Found matching image:', imageUrl);
+                    resolve(imageUrl);
+
+                } catch (error) {
+                    console.error('Processing error:', {
+                        message: error.message,
+                        rawOutput: stdout,
+                        extractedList: extractedList,
+                        stack: error.stack
+                    });
+                    reject(error);
+                } finally {
+                    try {
+                        fs.unlinkSync(targetFile);
+                    } catch (cleanupErr) {
+                        console.warn('Cleanup failed:', cleanupErr);
+                    }
                 }
-
-                const objectKey = await fetchClothing(Model, extractedList);
-                const imageUrl = await getS3ObjectUrl(objectKey);
-
-                console.log(`Image URL: ${imageUrl}`);
-                resolve(imageUrl);
-
-            } catch (error) {
-                console.error("Error processing clothing:", error);
-                reject(error);
-            }
-        });
+            });
+        } catch (error) {
+            console.error('Setup error:', error);
+            reject(error);
+        }
     });
 }
-
 
 // Serve uploaded images
 app.use(express.static('uploads'));

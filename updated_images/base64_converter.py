@@ -1,6 +1,5 @@
 import base64
 import sys
-import requests
 import json
 # Pass the image data to an encoding function.
 def encode_image(image):
