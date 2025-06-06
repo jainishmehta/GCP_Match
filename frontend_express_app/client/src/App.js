@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import ImageUpload from './ImageUpload';  // your ImageUpload component
-import ResultsPage from './ResultsPage'; // the page that shows the uploaded image and match
+import ImageUpload from './ImageUpload';
+import ResultsPage from './ResultsPage';
 
 const App = () => {
   return (

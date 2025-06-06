@@ -9,13 +9,19 @@ const ImageUpload = () => {
   const navigate = useNavigate();
 
   const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+    const selectedFile = e.target.files[0];
+    if (selectedFile && !selectedFile.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+    setFile(selectedFile);
+    setError(null);
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return;
-    
+
     setLoading(true);
     setError(null);
 
@@ -23,19 +29,36 @@ const ImageUpload = () => {
     formData.append('image', file);
 
     try {
-      const API_URL = process.env.REACT_APP_API_URL || 'https://gcp-match.onrender.com';
+      const API_URL = 'http://localhost:10000';
       const response = await fetch(`${API_URL}/upload`, {
         method: 'POST',
         body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+        mode: 'cors'
       });
 
-      if (!response.ok) throw new Error('Upload failed. Please try again.');
-      
+      if (!response.ok) {
+        let errorMsg = 'Upload failed';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch {}
+        throw new Error(errorMsg);
+      }
+
       const result = await response.json();
-      navigate('/results', { state: result });
+      navigate('/results', { 
+        state: { 
+          uploadedImageUrl: URL.createObjectURL(file),
+          closestImageUrl: result.closestImageUrl,
+          message: result.message
+        }
+      });
 
     } catch (error) {
-      setError(error.message);
+      setError(error.message || 'Failed to upload image');
     } finally {
       setLoading(false);
     }
@@ -47,7 +70,6 @@ const ImageUpload = () => {
         <div className="header">
           <h1 className="title">Upload Your Fashion Image</h1>
         </div>
-
         <form onSubmit={handleUpload} className="upload-form">
           <div className="file-input-container">
             <input 
@@ -58,16 +80,9 @@ const ImageUpload = () => {
               className="hidden-input"
             />
             <label htmlFor="file-input" className="file-label">
-              {file ? (
-                <>
-                  {file.name}
-                </>
-              ) : (
-                'Choose File'
-              )}
+              {file ? file.name : 'Choose File'}
             </label>
           </div>
-
           {file && (
             <div className="preview-container">
               <img 
@@ -77,19 +92,13 @@ const ImageUpload = () => {
               />
             </div>
           )}
-
           <button 
             type="submit" 
             className="upload-button"
             disabled={!file || loading}
           >
-            {loading ? (
-              <div className="spinner"></div>
-            ) : (
-              'Find Matching Fashion'
-            )}
+            {loading ? <div className="spinner"></div> : 'Find Matching Fashion'}
           </button>
-
           {error && <div className="error-message">{error}</div>}
         </form>
       </div>

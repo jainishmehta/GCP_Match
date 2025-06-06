@@ -11,12 +11,12 @@
     "web-vitals": "^4.2.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
+    "start": "export NODE_OPTIONS=--openssl-legacy-provider && react-scripts start",
+    "build": "export NODE_OPTIONS=--openssl-legacy-provider && react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "proxy": "http://localhost:5000"
+    "eject": "react-scripts eject"
   },
+  "proxy": "http://localhost:10000",
   "eslintConfig": {
     "extends": [
       "react-app",
