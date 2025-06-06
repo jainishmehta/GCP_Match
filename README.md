@@ -4,4 +4,4 @@ Currently, the project is hosted on https://visualmatcher.netlify.app/ using Net
 
 # Running Locally
 
-From frontend_express_app run `node app.js` and from the frontend_express_app/client directory, run `npm start` 
+From frontend_express_app run `node app.js`. In another directory, go to the frontend_express_app/client directory, run `npm start` 
