@@ -18,8 +18,8 @@ def encode_image(image_path):
         # Verify it's an image using PIL
         try:
             with Image.open(image_path) as img:
-                print(f"Image format: {img.format}")
-                print(f"Image size: {img.size}")
+                print(f"Image format: {img.format}", file=sys.stderr)
+                print(f"Image size: {img.size}", file=sys.stderr)
         except Exception as e:
             raise ValueError(f"Not a valid image file: {e}")
             
@@ -45,7 +45,7 @@ def encode_image(image_path):
                 json.dump(request_data, f)
             
             # Print the base64 string wrapped in square brackets
-            print(f"[{encoded_string.decode('utf-8')}]")
+            # print(f"[{encoded_string.decode('utf-8')}]")
             
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)

@@ -1,14 +1,13 @@
 import base64
 import sys
-import json
-# Pass the image data to an encoding function.
-def encode_image(image):
-    with open(image, "rb") as image_file:
-        encoded_string = (image_file.read())
-    with open("request.json", "r") as file:
-        data = json.load(file)
-    data['requests'][0]['image']['content'] = str(encoded_string)[2:-1]
-    with open("request.json", "w") as file:
-        json.dump(data, file)
-    return
-encode_image(sys.argv[1])
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+    print(encoded_string) # <-- THIS IS THE KEY CHANGE
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python3 base64_converter.py <image_path>", file=sys.stderr)
+        sys.exit(1)
+    encode_image(sys.argv[1])

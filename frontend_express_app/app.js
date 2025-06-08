@@ -194,67 +194,138 @@ function getS3ObjectUrl(objectKey) {
 function triggerBashScript(fileExecuted) {
     return new Promise((resolve, reject) => {
         const sourceFile = path.join(uploadDir, fileExecuted);
-        const targetDir = path.join(__dirname, 'base64_uploads');
-        const targetFile = path.join(targetDir, fileExecuted);
+        const targetDir = path.join(__dirname, 'base64_uploads'); // This is where the python script will be executed from
+        const targetFile = path.join(targetDir, fileExecuted); // The image file copied to the targetDir
+
         try {
-            if (!fs.existsSync(sourceFile)) throw new Error(`Source file not found: ${sourceFile}`);
+            // Ensure the source file exists before proceeding
+            if (!fs.existsSync(sourceFile)) {
+                throw new Error(`Source file not found: ${sourceFile}`);
+            }
+
+            // Create the temporary directory for base64 conversion
             fs.mkdirSync(targetDir, { recursive: true });
+            
+            // Copy the uploaded image to the temporary directory
             fs.copyFileSync(sourceFile, targetFile);
 
-            const command = `cd ${targetDir} && python3 base64_converter.py ../uploads/${fileExecuted} && ./convert_upload.sh`;
+            // Construct the command to execute Python and Bash scripts
+            // `../uploads/${fileExecuted}` path within the base64_uploads directory for python
+            const command = `cd ${targetDir} && ./convert_upload.sh "${sourceFile}"`;
             console.log('Executing command:', command);
 
+            // Execute the command
             exec(command, async (err, stdout, stderr) => {
-                let extractedList = [];
+                let extractedList = []; // Initialize extractedList here
                 try {
-                    if (err) {
-                        console.error('Script execution error:', { error: err, stderr });
-                        throw new Error(`Script execution failed: ${stderr}`);
+                    // Always log stderr, even if there's no primary error
+                    if (stderr) {
+                        console.warn('Bash script STDERR output:\n', stderr);
+                        // Consider if critical errors in stderr should always lead to rejection
+                        // For now, we'll let stdout parsing decide, but this is a good place to catch script failures
                     }
+
+                    if (err) {
+                        console.error('Script execution encountered an error:', err);
+                        return reject(new Error(`Script execution failed: ${err.message || 'Unknown error'}. Stderr: ${stderr || 'N/A'}`));
+                    }
+
+                    console.log('Bash script STDOUT raw output:\n', stdout);
+
+                    // Attempt to find all arrays. This is useful if unexpected output still exists.
                     const arrays = stdout.match(/\[(.*?)\]/g);
-                    if (!arrays || arrays.length === 0) throw new Error('No arrays found in output');
-                    const lastArray = arrays[arrays.length - 1];
-                    console.log('Found label array:', lastArray);
-                    extractedList = lastArray
-                        .slice(1, -1)
+
+                    if (!arrays || arrays.length === 0) {
+                        console.error('No square bracket arrays found in stdout.');
+                        return reject(new Error('No array-like structure found in script output.'));
+                    }
+
+                    // Always try to take the last array, which should be the labels array
+                    const lastArrayString = arrays[arrays.length - 1];
+                    console.log('Candidate label array string (last found array):\n', lastArrayString);
+
+                    // Proceed with parsing and filtering
+                    extractedList = lastArrayString
+                        .slice(1, -1) // Remove the outer [ ]
                         .split(',')
                         .map(item => item.trim())
-                        .filter(item => item && !item.startsWith('iVBOR') && item.includes(':') && !isNaN(parseFloat(item.split(':')[1])));
-                    if (!extractedList.length) throw new Error('No valid labels found in output');
-                    console.log('Extracted labels:', extractedList);
+                        // Refined filter:
+                        // - item must not be empty
+                        // - item must contain a colon (for "label:score")
+                        // - The part after the colon must be a valid number (score)
+                        // - Explicitly exclude the base64 preamble if it somehow slipped in
+                        .filter(item => {
+                            if (!item) return false; // Exclude empty strings
+                            if (item.startsWith('iVBOR')) return false; // Exclude base64 strings
+                            const parts = item.split(':');
+                            if (parts.length !== 2) return false; // Must have label and score
+                            const score = parseFloat(parts[1]);
+                            return !isNaN(score) && isFinite(score); // Score must be a valid number
+                        });
 
-                    await mongoose.connect(process.env.MONGO_URI || "mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority");
+                    if (extractedList.length === 0) {
+                        console.error('After filtering, no valid labels were extracted. Original last array string:', lastArrayString);
+                        return reject(new Error('No valid labels found in output after parsing and filtering.'));
+                    }
+
+                    console.log('Successfully extracted and filtered labels:', extractedList);
+
+                    // --- Database and S3 logic ---
+                    // Ensure mongoose connection is robust (might need to handle existing connection)
+                    if (mongoose.connection.readyState === 0) { // Not connected
+                        await mongoose.connect(process.env.MONGO_URI || "mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority");
+                    } else {
+                        console.log("Already connected to MongoDB.");
+                    }
+                    
                     const processedList = processKnnMatch(extractedList);
-                    if (!processedList?.length) throw new Error('No valid clothing types found');
-                    const bestClothingType = processedList[0].split(' ')[0]?.trim().toLowerCase();
-                    if (!bestClothingType) throw new Error('Invalid clothing type format');
+                    if (!processedList || processedList.length === 0) {
+                        throw new Error('No valid clothing types found by KNN match.');
+                    }
+                    
+                    const bestClothingType = processedList[0]?.split(' ')[0]?.trim().toLowerCase();
+                    if (!bestClothingType) {
+                        throw new Error('Invalid clothing type format from KNN match.');
+                    }
 
-                    console.log('Best clothing type:', bestClothingType);
+                    console.log('Best clothing type determined:', bestClothingType);
                     const clothingModels = { short: Short, dress: Dress, shirt: Shirt, pants: Pant };
                     const Model = clothingModels[bestClothingType];
-                    if (!Model) throw new Error(`Unsupported clothing type: ${bestClothingType}`);
+                    if (!Model) {
+                        throw new Error(`Unsupported clothing type: ${bestClothingType}. Available: ${Object.keys(clothingModels).join(', ')}`);
+                    }
 
                     const objectKey = await fetchClothing(Model, extractedList);
                     const imageUrl = await getS3ObjectUrl(objectKey);
 
-                    console.log('Found matching image:', imageUrl);
+                    console.log('Found matching image URL:', imageUrl);
                     resolve(imageUrl);
 
-                } catch (error) {
-                    console.error('Processing error:', {
-                        message: error.message,
-                        rawOutput: stdout,
-                        extractedList,
-                        stack: error.stack
+                } catch (processingError) {
+                    console.error('Error during Vision API response processing or database interaction:', {
+                        message: processingError.message,
+                        rawOutput: stdout, // Include raw stdout for debugging
+                        stderrOutput: stderr, // Include stderr for debugging
+                        extractedListDuringError: extractedList, // What was in extractedList when it failed
+                        stack: processingError.stack
                     });
-                    reject(error);
+                    // Re-reject with a more specific error message
+                    reject(new Error(`Processing failed: ${processingError.message}`));
                 } finally {
-                    try { fs.unlinkSync(targetFile); } catch (cleanupErr) { console.warn('Cleanup failed:', cleanupErr); }
+                    // Cleanup the temporary file
+                    try {
+                        if (fs.existsSync(targetFile)) {
+                            fs.unlinkSync(targetFile);
+                            console.log(`Cleaned up temporary file: ${targetFile}`);
+                        }
+                    } catch (cleanupErr) {
+                        console.warn('Cleanup failed:', cleanupErr.message);
+                    }
                 }
             });
-        } catch (error) {
-            console.error('Setup error:', error);
-            reject(error);
+        } catch (setupError) {
+            console.error('Initial setup (file copy/directory creation) error:', setupError);
+            reject(new Error(`Setup failed: ${setupError.message}`));
         }
     });
 }
