@@ -111,7 +111,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            uploadedImageUrl: `${process.env.BACKEND_URL || 'http://localhost:10000'}/uploads/${req.file.filename}`,
+            uploadedImageUrl: `${process.env.BACKEND_URL || 'http://localhost:10000/'}uploads/${req.file.filename}`,
             closestImageUrl: result,
             message: 'Upload successful'
         });
