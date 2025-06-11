@@ -1,10 +1,17 @@
 #!/bin/bash
+if [ -f ".env" ]; then
+    export $(grep -v '^#' .env | xargs)
+elif [ -f "../.env" ]; then
+    export $(grep -v '^#' ../.env | xargs)
+else
+    echo "Error: .env file not found" >&2
+    exit 1
+fi
+
 
 PROJECT_ID="812751601631" # Ensure this Project ID is correct and has Vision API access
 REQUEST_JSON="request.json"
 OUTPUT_FILE="annotations.txt" # This file is for your internal debugging/logging, not consumed by Node.js
-GOOGLE_API_KEY="AIzaSyCCGJx1xmTEbIbwcADMk1y340t4kZcNDaY"
-
 
 # Check if API key is set
 if [ -z "$GOOGLE_API_KEY" ]; then
