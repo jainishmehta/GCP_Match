@@ -3,14 +3,14 @@
 PROJECT_ID="812751601631" # Ensure this Project ID is correct and has Vision API access
 REQUEST_JSON="request.json"
 OUTPUT_FILE="annotations.txt" # This file is for your internal debugging/logging, not consumed by Node.js
+GOOGLE_API_KEY="AIzaSyCCGJx1xmTEbIbwcADMk1y340t4kZcNDaY"
 
-# Execute the python script first to create request.json
-# Note: The python script must be executable and in the correct path relative to where convert_upload.sh is run
-# And it should NOT print anything to stdout that isn't related to its errors.
-# In your Node.js app, the command is `python3 base64_converter.py ../uploads/${fileExecuted} && ./convert_upload.sh`
-# So, the python script will be executed first within the `base64_uploads` directory.
-# The image path `../uploads/${fileExecuted}` assumes `convert_upload.sh` is called from `base64_uploads`
-# and the actual uploaded image is in `uploads/` one level up.
+
+# Check if API key is set
+if [ -z "$GOOGLE_API_KEY" ]; then
+    echo "Error: GOOGLE_API_KEY environment variable not set" >&2
+    exit 1
+fi
 
 # Make sure request.json is created before calling curl
 if [ ! -f "$REQUEST_JSON" ]; then
@@ -18,13 +18,11 @@ if [ ! -f "$REQUEST_JSON" ]; then
     exit 1
 fi
 
-# Call Google Vision API and capture the full JSON response
+# Call Google Vision API using API key instead of gcloud auth
 response=$(curl -s -X POST \
-    -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-    -H "x-goog-user-project: $PROJECT_ID" \
     -H "Content-Type: application/json; charset=utf-8" \
     -d "@$REQUEST_JSON" \
-    "https://vision.googleapis.com/v1/images:annotate")
+    "https://vision.googleapis.com/v1/images:annotate?key=$GOOGLE_API_KEY")
 
 # Check if curl failed (e.g., network error, bad auth)
 if [ $? -ne 0 ]; then

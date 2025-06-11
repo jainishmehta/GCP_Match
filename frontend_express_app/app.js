@@ -194,8 +194,8 @@ function getS3ObjectUrl(objectKey) {
 function triggerBashScript(fileExecuted) {
     return new Promise((resolve, reject) => {
         const sourceFile = path.join(uploadDir, fileExecuted);
-        const targetDir = path.join(__dirname, 'base64_uploads'); // This is where the python script will be executed from
-        const targetFile = path.join(targetDir, fileExecuted); // The image file copied to the targetDir
+        const targetDir = path.join(__dirname, 'base64_uploads');
+        const targetFile = path.join(targetDir, fileExecuted);
 
         try {
             // Ensure the source file exists before proceeding
@@ -209,20 +209,24 @@ function triggerBashScript(fileExecuted) {
             // Copy the uploaded image to the temporary directory
             fs.copyFileSync(sourceFile, targetFile);
 
-            // Construct the command to execute Python and Bash scripts
-            // `../uploads/${fileExecuted}` path within the base64_uploads directory for python
-            const command = `cd ${targetDir} && ./convert_upload.sh "${sourceFile}"`;
+            // Construct the command with explicit PATH setting
+            const gcloudPath = '/opt/render/project/src/frontend_express_app/gcloud-sdk/google-cloud-sdk/bin';
+            const command = `cd ${targetDir} && export PATH="${gcloudPath}:$PATH" && ./convert_upload.sh "${sourceFile}"`;
             console.log('Executing command:', command);
 
-            // Execute the command
-            exec(command, async (err, stdout, stderr) => {
-                let extractedList = []; // Initialize extractedList here
+            // Execute the command with explicit environment
+            const execOptions = {
+                env: {
+                    ...process.env,
+                    PATH: `${gcloudPath}:${process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`
+                }
+            };
+
+            exec(command, execOptions, async (err, stdout, stderr) => {
+                let extractedList = [];
                 try {
-                    // Always log stderr, even if there's no primary error
                     if (stderr) {
                         console.warn('Bash script STDERR output:\n', stderr);
-                        // Consider if critical errors in stderr should always lead to rejection
-                        // For now, we'll let stdout parsing decide, but this is a good place to catch script failures
                     }
 
                     if (err) {
@@ -232,7 +236,6 @@ function triggerBashScript(fileExecuted) {
 
                     console.log('Bash script STDOUT raw output:\n', stdout);
 
-                    // Attempt to find all arrays. This is useful if unexpected output still exists.
                     const arrays = stdout.match(/\[(.*?)\]/g);
 
                     if (!arrays || arrays.length === 0) {
@@ -240,27 +243,20 @@ function triggerBashScript(fileExecuted) {
                         return reject(new Error('No array-like structure found in script output.'));
                     }
 
-                    // Always try to take the last array, which should be the labels array
                     const lastArrayString = arrays[arrays.length - 1];
                     console.log('Candidate label array string (last found array):\n', lastArrayString);
 
-                    // Proceed with parsing and filtering
                     extractedList = lastArrayString
-                        .slice(1, -1) // Remove the outer [ ]
+                        .slice(1, -1)
                         .split(',')
                         .map(item => item.trim())
-                        // Refined filter:
-                        // - item must not be empty
-                        // - item must contain a colon (for "label:score")
-                        // - The part after the colon must be a valid number (score)
-                        // - Explicitly exclude the base64 preamble if it somehow slipped in
                         .filter(item => {
-                            if (!item) return false; // Exclude empty strings
-                            if (item.startsWith('iVBOR')) return false; // Exclude base64 strings
+                            if (!item) return false;
+                            if (item.startsWith('iVBOR')) return false;
                             const parts = item.split(':');
-                            if (parts.length !== 2) return false; // Must have label and score
+                            if (parts.length !== 2) return false;
                             const score = parseFloat(parts[1]);
-                            return !isNaN(score) && isFinite(score); // Score must be a valid number
+                            return !isNaN(score) && isFinite(score);
                         });
 
                     if (extractedList.length === 0) {
@@ -270,9 +266,7 @@ function triggerBashScript(fileExecuted) {
 
                     console.log('Successfully extracted and filtered labels:', extractedList);
 
-                    // --- Database and S3 logic ---
-                    // Ensure mongoose connection is robust (might need to handle existing connection)
-                    if (mongoose.connection.readyState === 0) { // Not connected
+                    if (mongoose.connection.readyState === 0) {
                         await mongoose.connect(process.env.MONGO_URI || "mongodb+srv://jainishmehta:jainish1234@cluster0.7izqa.mongodb.net/clothing_images?retryWrites=true&w=majority");
                     } else {
                         console.log("Already connected to MongoDB.");
@@ -304,15 +298,13 @@ function triggerBashScript(fileExecuted) {
                 } catch (processingError) {
                     console.error('Error during Vision API response processing or database interaction:', {
                         message: processingError.message,
-                        rawOutput: stdout, // Include raw stdout for debugging
-                        stderrOutput: stderr, // Include stderr for debugging
-                        extractedListDuringError: extractedList, // What was in extractedList when it failed
+                        rawOutput: stdout,
+                        stderrOutput: stderr,
+                        extractedListDuringError: extractedList,
                         stack: processingError.stack
                     });
-                    // Re-reject with a more specific error message
                     reject(new Error(`Processing failed: ${processingError.message}`));
                 } finally {
-                    // Cleanup the temporary file
                     try {
                         if (fs.existsSync(targetFile)) {
                             fs.unlinkSync(targetFile);
