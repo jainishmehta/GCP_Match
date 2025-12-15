@@ -29,8 +29,8 @@ const ImageUpload = () => {
     formData.append('image', file);
 
     try {
-       const API_URL = 'http://localhost:10000';
-    //  const API_URL = 'https://gcp-match.onrender.com'; 
+    //   const API_URL = 'http://localhost:10000';
+      const API_URL = 'https://gcp-match.onrender.com'; 
       const response = await fetch(`${API_URL}/upload`, {
         method: 'POST',
         body: formData,
